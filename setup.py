@@ -61,7 +61,8 @@ setup(
         "systemd_python",
         "paramiko",
         "pyserial",
-        "hidapi"
+        "hidapi",
+        "uuid"
     ],
     zip_safe=True
 )
