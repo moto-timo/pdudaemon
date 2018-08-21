@@ -23,7 +23,7 @@
 
 import logging
 from pdudaemon.drivers.driver import PDUDriver
-import hid
+import hidapi
 
 import os
 log = logging.getLogger("pdud.drivers." + os.path.basename(__file__))
