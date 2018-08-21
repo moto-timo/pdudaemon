@@ -64,7 +64,8 @@ setup(
         "hidapi",
         "pysnmp",
         "pyasn1",
-        "pyusb"
+        "pyusb",
+        "uuid"
     ],
     zip_safe=True
 )

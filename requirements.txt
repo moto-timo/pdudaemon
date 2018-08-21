@@ -8,3 +8,4 @@ hidapi
 pysnmp
 pyasn1
 pyusb
+uuid
