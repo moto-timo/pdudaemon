@@ -80,6 +80,7 @@ from pdudaemon.drivers.cyberpower81001 import Cyberpower81001
 from pdudaemon.drivers.homeassistant import HomeAssistantHTTP
 from pdudaemon.drivers.ubus import Ubus
 from pdudaemon.drivers.shelly_gen2 import ShellyGen2
+from pdudaemon.drivers.netgearplus import NetgearPlusSwitch
 
 __all__ = [
     ACME.__name__,
@@ -142,6 +143,7 @@ __all__ = [
     HomeAssistantHTTP.__name__,
     Ubus.__name__,
     ShellyGen2.__name__,
+    NetgearPlusSwitch.__name__,
 ]
 
 log = logging.getLogger("pdud.drivers." + os.path.basename(__file__))
