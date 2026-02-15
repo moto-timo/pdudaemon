@@ -17,9 +17,13 @@
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 #  MA 02110-1301, USA.
 
+import asyncio
 import logging
-from pysnmp.hlapi import setCmd, SnmpEngine, UsmUserData, UdpTransportTarget, ContextData, CommunityData, ObjectType, ObjectIdentity
-import pysnmp.hlapi as pysnmp_api
+from pysnmp.hlapi.v3arch.asyncio import (
+    set_cmd, SnmpEngine, UsmUserData, UdpTransportTarget,
+    ContextData, CommunityData, ObjectType, ObjectIdentity,
+)
+import pysnmp.hlapi.v3arch.asyncio as pysnmp_api
 from pdudaemon.drivers.driver import PDUDriver, FailedRequestException, UnknownCommandException
 import os
 log = logging.getLogger("pdud.drivers." + os.path.basename(__file__))
@@ -61,61 +65,68 @@ class SNMP(PDUDriver):
         else:
             raise UnknownCommandException("Unknown command %s." % (command))
 
-        transport = UdpTransportTarget((self.hostname, 161))
+        asyncio.run(self._port_interaction_async(set_bit, port_number))
 
-        if self.inside_number:
-            # It is possible to pass 2 or 3 snmp argument values
-            filled_controlpoint = self.controlpoint.replace('*', str(port_number))
-            indexed_object_list = [self.mib, filled_controlpoint]
-            # If there is a key static_ending available, add a static ending value
-            if self.static_ending is not None:
-                indexed_object_list.append(int(self.static_ending))
-        else:
-            indexed_object_list = [self.mib, self.controlpoint, port_number]
+    async def _port_interaction_async(self, set_bit, port_number):
+        snmpEngine = SnmpEngine()
+        try:
+            transport = await UdpTransportTarget.create((self.hostname, 161))
 
-        objecttype = ObjectType(
-            ObjectIdentity(*indexed_object_list).addAsn1MibSource(
-                'http://mibs.snmplabs.com/asn1/@mib@'), int(set_bit))
+            if self.inside_number:
+                # It is possible to pass 2 or 3 snmp argument values
+                filled_controlpoint = self.controlpoint.replace('*', str(port_number))
+                indexed_object_list = [self.mib, filled_controlpoint]
+                # If there is a key static_ending available, add a static ending value
+                if self.static_ending is not None:
+                    indexed_object_list.append(int(self.static_ending))
+            else:
+                indexed_object_list = [self.mib, self.controlpoint, port_number]
 
-        if self.version == 'snmpv3':
-            if not self.username:
-                raise FailedRequestException("No username set for snmpv3")
+            objecttype = ObjectType(
+                ObjectIdentity(*indexed_object_list).add_asn1_mib_source(
+                    'https://mibs.pysnmp.com/asn1/@mib@'), int(set_bit))
 
-            protocols = {}
-            if self.auth_protocol is not None:
-                a_protocol = getattr(pysnmp_api, self.auth_protocol)
-                protocols['authProtocol'] = a_protocol
+            if self.version == 'snmpv3':
+                if not self.username:
+                    raise FailedRequestException("No username set for snmpv3")
 
-            if self.priv_protocol is not None:
-                p_protocol = getattr(pysnmp_api, self.priv_protocol)
-                protocols['privProtocol'] = p_protocol
+                protocols = {}
+                if self.auth_protocol is not None:
+                    a_protocol = getattr(pysnmp_api, self.auth_protocol)
+                    protocols['authProtocol'] = a_protocol
 
-            userdata = UsmUserData(self.username, self.authpass, self.privpass, **protocols)
-            errorIndication, errorStatus, errorIndex, varBinds = next(
-                setCmd(SnmpEngine(),
-                       userdata,
-                       transport,
-                       ContextData(),
-                       objecttype)
-            )
-        elif self.version == 'snmpv1':
-            if not self.community:
-                raise FailedRequestException("No community set for snmpv1")
-            errorIndication, errorStatus, errorIndex, varBinds = next(
-                setCmd(SnmpEngine(),
-                       CommunityData(self.community),
-                       transport,
-                       ContextData(),
-                       objecttype)
-            )
-        else:
-            raise FailedRequestException("Unknown snmp version")
+                if self.priv_protocol is not None:
+                    p_protocol = getattr(pysnmp_api, self.priv_protocol)
+                    protocols['privProtocol'] = p_protocol
 
-        if errorIndication:
-            raise FailedRequestException(errorIndication)
-        elif errorStatus:
-            raise FailedRequestException(errorStatus)
-        else:
-            for varBind in varBinds:
-                log.debug(' = '.join([x.prettyPrint() for x in varBind]))
-            return True
+                userdata = UsmUserData(self.username, self.authpass, self.privpass, **protocols)
+                errorIndication, errorStatus, errorIndex, varBinds = await set_cmd(
+                    snmpEngine,
+                    userdata,
+                    transport,
+                    ContextData(),
+                    objecttype,
+                )
+            elif self.version == 'snmpv1':
+                if not self.community:
+                    raise FailedRequestException("No community set for snmpv1")
+                errorIndication, errorStatus, errorIndex, varBinds = await set_cmd(
+                    snmpEngine,
+                    CommunityData(self.community),
+                    transport,
+                    ContextData(),
+                    objecttype,
+                )
+            else:
+                raise FailedRequestException("Unknown snmp version")
+
+            if errorIndication:
+                raise FailedRequestException(errorIndication)
+            elif errorStatus:
+                raise FailedRequestException(errorStatus)
+            else:
+                for varBind in varBinds:
+                    log.debug(' = '.join([x.prettyPrint() for x in varBind]))
+                return True
+        finally:
+            snmpEngine.close_dispatcher()
